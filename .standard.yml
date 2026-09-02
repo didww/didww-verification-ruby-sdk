@@ -1,0 +1,2 @@
+# The gemspec's floor, so every CI matrix cell lints identically.
+ruby_version: 3.1

@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.1 is the gemspec's floor; nothing else proves lib/ still parses there.
+        ruby: [ '3.1', '3.3', '3.4' ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Show toolchain
+        run: |
+          ruby --version
+          bundle --version
+
+      # One log per suite. Sharing one would let the guard below count two
+      # summaries from a single suite while the other never ran.
+      - name: Specs
+        run: |
+          set -o pipefail
+          bundle exec rake spec 2>&1 | tee core.log
+
+      - name: Rails integration specs
+        run: |
+          set -o pipefail
+          bundle exec rake spec:rails 2>&1 | tee rails.log
+
+      - name: Lint
+        run: bundle exec rake standard
+
+      # RSpec exits 0 on an empty suite, so a run that executed nothing looks
+      # like a pass. ANSI is stripped so enabling colour cannot break this.
+      - name: Assert each suite actually ran
+        if: always()
+        run: |
+          status=0
+          for log in core.log rails.log; do
+            if [ ! -f "$log" ]; then
+              echo "::error::$log is missing — its suite did not run."
+              status=1
+              continue
+            fi
+            if sed 's/\x1b\[[0-9;]*m//g' "$log" \
+                 | grep -qE '^[1-9][0-9]* examples?, 0 failures'; then
+              echo "$log: ok — $(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E '^[0-9]+ examples?,')"
+            else
+              echo "::error::$log reported no passing examples."
+              status=1
+            fi
+          done
+          exit $status

@@ -1,0 +1,15 @@
+# A library pins nothing for its consumers — let them resolve freely.
+/Gemfile.lock
+
+/pkg/
+/coverage/
+/.bundle/
+/tmp/
+*.gem
+
+# Agent and editor scratch. Ignored here, not in a personal global config that
+# a clone does not inherit.
+/.omc/
+.claude/
+.DS_Store
+.ruby-lsp/
