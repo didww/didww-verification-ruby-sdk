@@ -110,11 +110,9 @@ module DIDWW
         end
 
         errors = parse_errors(body)
-        raise error_class(response.status).new(
-          status: response.status,
-          errors: errors,
-          response: response
-        )
+        klass = error_class(response.status)
+        extra = (klass == RateLimitedError) ? {retry_after: parse_retry_after(response)} : {}
+        raise klass.new(status: response.status, errors: errors, response: response, **extra)
       end
 
       # Map the {"errors": [{"code", "detail"}]} envelope to ErrorItem objects.
@@ -131,12 +129,20 @@ module DIDWW
         end
       end
 
+      # @return [Integer, nil] the Retry-After header in seconds, nil if
+      #   missing or not a plain non-negative integer (e.g. an HTTP-date).
+      def parse_retry_after(response)
+        value = response.headers["Retry-After"].to_s
+        Integer(value, 10) if value.match?(/\A\d+\z/)
+      end
+
       def error_class(status)
         case status
         when 401 then UnauthorizedError
         when 402 then BalanceInsufficientError
         when 404 then NotFoundError
         when 400, 422 then ValidationError
+        when 429 then RateLimitedError
         when 500..599 then ServerError
         else APIError
         end
