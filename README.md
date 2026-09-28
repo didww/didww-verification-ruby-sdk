@@ -197,6 +197,8 @@ DIDWW::OTPVerification::Client.new(
 ) { |conn| conn.proxy = "http://proxy:3128" }
 ```
 
+Every request carries `User-Agent: didww-verification-ruby/<version>`.
+
 ## Auth modes
 
 | Mode               | Header                                          | Secret   | Notes                              |

@@ -197,6 +197,27 @@ RSpec.describe DIDWW::OTPVerification::Client do
       build.start_verification(destination: "+49", delivery_method: "sms")
       expect(stub).to have_been_requested
     end
+
+    it "sends the SDK User-Agent header" do
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .with(headers: {"User-Agent" => "didww-verification-ruby/#{DIDWW::OTPVerification::VERSION}"})
+        .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+      build.start_verification(destination: "+49", delivery_method: "sms")
+      expect(stub).to have_been_requested
+    end
+
+    it "keeps the SDK User-Agent header when a Faraday block sets another" do
+      client = described_class.new(key: key, secret: secret, env: :sandbox) do |conn|
+        conn.headers["User-Agent"] = "overridden/2.0"
+      end
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .with(headers: {"User-Agent" => "didww-verification-ruby/#{DIDWW::OTPVerification::VERSION}"})
+        .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+      client.start_verification(destination: "+49", delivery_method: "sms")
+      expect(stub).to have_been_requested
+    end
   end
 
   describe "#report_verification" do
