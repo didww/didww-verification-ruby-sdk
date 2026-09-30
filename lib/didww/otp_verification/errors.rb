@@ -48,6 +48,20 @@ module DIDWW
     # 400 Bad Request / 422 Unprocessable Content (validation errors in +errors+).
     class ValidationError < APIError; end
 
+    # 429 Too Many Requests (+destination_in_cooldown+ code): a start_verification
+    # for the same app and destination landed within the API's cooldown window.
+    # Never auto-retry this.
+    class RateLimitedError < APIError
+      # @return [Integer, nil] seconds to wait, from the Retry-After header.
+      #   Nil if the header is missing or not a plain integer.
+      attr_reader :retry_after
+
+      def initialize(message = nil, status:, errors: [], response: nil, retry_after: nil)
+        @retry_after = retry_after
+        super(message, status: status, errors: errors, response: response)
+      end
+    end
+
     # 5xx Server Error (+internal_error+ code).
     class ServerError < APIError; end
   end

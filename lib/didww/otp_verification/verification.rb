@@ -55,6 +55,12 @@ module DIDWW
         @sms && @sms["interception_timeout"]
       end
 
+      # @return [Integer, nil] the length of this verification's code, 4..8
+      #   (set per application). Only present for the +sms+ method.
+      def sms_code_length
+        @sms && @sms["code_length"]
+      end
+
       # @return [String, nil] SMS Retriever hash, echoed back only when one was
       #   stored on this verification.
       def sms_app_hash
@@ -69,6 +75,12 @@ module DIDWW
       # @return [String, nil] BCP 47 tag, only present for the +callout+ method.
       def callout_language
         @callout && @callout["language"]
+      end
+
+      # @return [Integer, nil] the length of this verification's code, 4..8
+      #   (set per application). Only present for the +callout+ method.
+      def callout_code_length
+        @callout && @callout["code_length"]
       end
 
       def pending? = status == "pending"

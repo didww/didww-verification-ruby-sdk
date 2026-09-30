@@ -33,7 +33,8 @@ verification.status   # => "pending"
 verification.pending? # => true
 verification.to_h     # => raw response data Hash with string keys
 
-# Report the code the user entered (counts as an attempt; max 3, expires in 2 min)
+# Report the code the user entered (counts as an attempt; max 3, expires per
+# the app's code lifetime)
 result = client.report_verification(
   verification.id, delivery_method: "sms", code: "1234"
 )
@@ -103,11 +104,13 @@ field or as a whole:
 ```ruby
 v.sms_template             # => "Your code is {{CODE}}"
 v.sms_language             # => "en-US"
-v.sms_interception_timeout # => 120
+v.sms_interception_timeout # => 300
+v.sms_code_length          # => 6
 v.sms_app_hash             # => "A1b2C3d4E5f", or nil if none was stored
 v.sms                      # => the raw block, or nil on a callout verification
 
 v.callout_language         # => "de-DE"
+v.callout_code_length      # => 6
 v.callout                  # => the raw block, or nil on an sms verification
 ```
 
@@ -119,8 +122,11 @@ because the two catalogues are separate, a tag honoured on `sms` can still fall
 back on `callout`.
 
 `sms_interception_timeout` is how many seconds a client should keep an on-device
-SMS listener armed. It is a fixed budget, not a countdown, and **not** a deadline
-for the verification — manual entry keeps working until `expires_at`.
+SMS listener armed. It equals the app's configured code lifetime (60–600 s,
+default 300) and is **not** a deadline for the verification itself — manual
+entry keeps working until `expires_at`.
+`sms_code_length`/`callout_code_length` is the length of this verification's
+code, 4–8 digits, set per application (default 6).
 `sms_app_hash` is echoed back only when one was stored, so it reflects what was
 persisted rather than what was requested.
 
@@ -330,7 +336,7 @@ carries `error_code` (switch on it) and `error_detail` (display it). These are
 | `pending`  | no       | `nil` — on its way, or awaiting a report                                                       |
 | `verified` | yes      | `nil`                                                                                          |
 | `failed`   | yes      | `too_many_attempts`, `dispatch_failed`, `stale_dispatch`, `superseded`, `application_deleted`   |
-| `expired`  | yes      | `expired` — past the 2-minute window                                                           |
+| `expired`  | yes      | `expired` — past the application's code lifetime (60–600 s, default 300)                       |
 | `denied`   | yes      | `denied_by_callback`, `denied_missing_callback_url`, `denied_invalid_callback_response`         |
 
 `superseded` means a newer `start_verification` for the same number retired this
@@ -364,6 +370,7 @@ Non-2xx responses raise a typed error under `DIDWW::OTPVerification::Error`:
 | `BalanceInsufficientError` | 402       | `balance_insufficient`                |
 | `NotFoundError`            | 404       | `not_found`                           |
 | `ValidationError`          | 400 / 422 | `parameter_missing` / per-field codes |
+| `RateLimitedError`         | 429       | `destination_in_cooldown`             |
 | `ServerError`              | 5xx       | `internal_error`                      |
 
 Every error carries the API's coded envelope: `#errors` is an array of
@@ -391,6 +398,12 @@ end
 
 The SDK does **not** auto-retry. If you add `faraday-retry`, exclude `POST`
 (double-charges) and `PATCH` (each report counts against the 3-attempt limit).
+
+A `start_verification` repeated too soon for the same app and destination
+raises `RateLimitedError` (429, `destination_in_cooldown`) — a short per-number
+cooldown (currently 30 s). `#retry_after` gives the wait in seconds (`nil` if
+the `Retry-After` header is missing or unparseable) — wait and call again
+yourself; never auto-retry it.
 
 ## Development
 

@@ -15,7 +15,7 @@ RSpec.describe DIDWW::OTPVerification::Client do
       "delivery_method" => "sms", "fee" => "0.06", "status" => "pending",
       "error_code" => nil, "error_detail" => nil,
       "expires_at" => "2026-07-15T10:02:00.000Z",
-      "sms" => {"template" => "Your code is {{CODE}}"}
+      "sms" => {"template" => "Your code is {{CODE}}", "code_length" => 6}
     }.merge(overrides)}
   end
 
@@ -338,21 +338,22 @@ RSpec.describe DIDWW::OTPVerification::Client do
 
     it "reads every field of a full sms block" do
       v = get_with_sms("template" => "Your code is {{CODE}}", "language" => "de-DE",
-        "interception_timeout" => 120, "app_hash" => "A1b2C3d4E5f")
+        "interception_timeout" => 300, "code_length" => 6, "app_hash" => "A1b2C3d4E5f")
 
       expect(v.sms_template).to eq("Your code is {{CODE}}")
       expect(v.sms_language).to eq("de-DE")
-      expect(v.sms_interception_timeout).to eq(120)
+      expect(v.sms_interception_timeout).to eq(300)
+      expect(v.sms_code_length).to eq(6)
       expect(v.sms_app_hash).to eq("A1b2C3d4E5f")
       expect(v.sms).to eq("template" => "Your code is {{CODE}}", "language" => "de-DE",
-        "interception_timeout" => 120, "app_hash" => "A1b2C3d4E5f")
+        "interception_timeout" => 300, "code_length" => 6, "app_hash" => "A1b2C3d4E5f")
     end
 
     it "returns nil for a key the sms block omits" do
-      v = get_with_sms("template" => "Your code is {{CODE}}", "interception_timeout" => 120)
+      v = get_with_sms("template" => "Your code is {{CODE}}", "interception_timeout" => 300)
 
       expect(v.sms_app_hash).to be_nil
-      expect(v.sms_interception_timeout).to eq(120)
+      expect(v.sms_interception_timeout).to eq(300)
     end
 
     it "returns nil from every sms reader when there is no sms block" do
@@ -362,6 +363,7 @@ RSpec.describe DIDWW::OTPVerification::Client do
       expect(v.sms_template).to be_nil
       expect(v.sms_language).to be_nil
       expect(v.sms_interception_timeout).to be_nil
+      expect(v.sms_code_length).to be_nil
       expect(v.sms_app_hash).to be_nil
     end
   end
@@ -385,6 +387,12 @@ RSpec.describe DIDWW::OTPVerification::Client do
       expect(v.callout).to eq("language" => "de-DE")
     end
 
+    it "reads the code_length the server generated" do
+      v = get_with_callout("language" => "de-DE", "code_length" => 8)
+
+      expect(v.callout_code_length).to eq(8)
+    end
+
     # An unmatched tag is not an error: the announcement falls back to en-US,
     # and this reader is the only way to see that it happened.
     it "reports the en-US fallback rather than echoing the request" do
@@ -406,6 +414,7 @@ RSpec.describe DIDWW::OTPVerification::Client do
 
       expect(v.callout).to eq({})
       expect(v.callout_language).to be_nil
+      expect(v.callout_code_length).to be_nil
     end
 
     it "returns nil from every callout reader when there is no callout block" do
@@ -413,6 +422,7 @@ RSpec.describe DIDWW::OTPVerification::Client do
 
       expect(v.callout).to be_nil
       expect(v.callout_language).to be_nil
+      expect(v.callout_code_length).to be_nil
     end
 
     it "leaves the sms readers nil on a callout verification" do
@@ -490,6 +500,7 @@ RSpec.describe DIDWW::OTPVerification::Client do
       402 => DIDWW::OTPVerification::BalanceInsufficientError,
       404 => DIDWW::OTPVerification::NotFoundError,
       422 => DIDWW::OTPVerification::ValidationError,
+      429 => DIDWW::OTPVerification::RateLimitedError,
       500 => DIDWW::OTPVerification::ServerError
     }.each do |status, klass|
       it "raises #{klass} on #{status}" do
@@ -499,6 +510,56 @@ RSpec.describe DIDWW::OTPVerification::Client do
           expect(e.status).to eq(status)
         end
       end
+    end
+
+    # Never auto-retried by this SDK; the header is the caller's contract for
+    # how long to wait before trying again.
+    it "exposes retry_after from the Retry-After header on 429, without retrying" do
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .to_return(status: 429,
+          body: {errors: [{code: "destination_in_cooldown", detail: "try again later"}]}.to_json,
+          headers: {"Content-Type" => "application/json", "Retry-After" => "17"})
+
+      expect { build.start_verification(destination: "+49", delivery_method: "sms") }
+        .to raise_error(DIDWW::OTPVerification::RateLimitedError) do |e|
+          expect(e.status).to eq(429)
+          expect(e.code).to eq("destination_in_cooldown")
+          expect(e.retry_after).to eq(17)
+        end
+      expect(stub).to have_been_requested.times(1)
+    end
+
+    it "leaves retry_after nil when the Retry-After header is missing" do
+      stub_request(:post, "#{base}/api/v1/verifications")
+        .to_return(status: 429, body: {errors: [{code: "destination_in_cooldown"}]}.to_json,
+          headers: {"Content-Type" => "application/json"})
+
+      expect { build.start_verification(destination: "+49", delivery_method: "sms") }
+        .to raise_error(DIDWW::OTPVerification::RateLimitedError) do |e|
+          expect(e.retry_after).to be_nil
+        end
+    end
+
+    it "reads a zero-padded Retry-After as decimal, not octal" do
+      stub_request(:post, "#{base}/api/v1/verifications")
+        .to_return(status: 429, body: {errors: [{code: "destination_in_cooldown"}]}.to_json,
+          headers: {"Content-Type" => "application/json", "Retry-After" => "08"})
+
+      expect { build.start_verification(destination: "+49", delivery_method: "sms") }
+        .to raise_error(DIDWW::OTPVerification::RateLimitedError) do |e|
+          expect(e.retry_after).to eq(8)
+        end
+    end
+
+    it "leaves retry_after nil when the Retry-After header is not a plain integer" do
+      stub_request(:post, "#{base}/api/v1/verifications")
+        .to_return(status: 429, body: {errors: [{code: "destination_in_cooldown"}]}.to_json,
+          headers: {"Content-Type" => "application/json", "Retry-After" => "Wed, 21 Oct 2026 07:28:00 GMT"})
+
+      expect { build.start_verification(destination: "+49", delivery_method: "sms") }
+        .to raise_error(DIDWW::OTPVerification::RateLimitedError) do |e|
+          expect(e.retry_after).to be_nil
+        end
     end
 
     it "raises a typed APIError when a 2xx body is not JSON" do
