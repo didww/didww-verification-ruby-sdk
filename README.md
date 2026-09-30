@@ -65,15 +65,18 @@ reads only the block matching `delivery_method` and ignores the others.
 | Field       | Description                                                                                                                                                                   |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `languages` | Preferred template languages as BCP 47 tags, most preferred first. Matched exactly, so the region subtag is required — `"pl"` does not match `pl-PL`. Unmatched tags fall back to `en-US`. |
-| `app_hash`  | Android SMS Retriever hash: exactly 11 characters of `[A-Za-z0-9+/]`. The delivered message is then prefixed with `<#> ` and the hash appended as its last token, so the handset can auto-fill the code. Omit it on every other platform. |
+| `autofill`  | Auto-fill marker for the delivered message. `{type: "app_hash", value: "..."}` is the Android SMS Retriever hash: exactly 11 characters of `[A-Za-z0-9+/]`. The message is then prefixed with `<#> ` and the hash appended as its last token, so the handset can auto-fill the code. `{type: "none"}` explicitly asks for no marker. Omit it on every other platform. |
 
-`app_hash` is here because a Ruby backend often starts the verification on behalf
+`autofill` is here because a Ruby backend often starts the verification on behalf
 of an Android app — the hash identifies that app, so only the app can compute it.
+The former `app_hash:` key still works as a deprecated alias for
+`autofill: {type: "app_hash", value: ...}` (it prints a deprecation warning
+when Ruby's `:deprecated` warnings are enabled); passing both raises `ArgumentError`.
 
 ```ruby
 client.start_verification(
   destination: "+4915112345678", delivery_method: "sms",
-  sms: {languages: ["en-US"], app_hash: "A1b2C3d4E5f"}
+  sms: {languages: ["en-US"], autofill: {type: "app_hash", value: "A1b2C3d4E5f"}}
 )
 ```
 
@@ -106,7 +109,7 @@ v.sms_template             # => "Your code is {{CODE}}"
 v.sms_language             # => "en-US"
 v.sms_interception_timeout # => 300
 v.sms_code_length          # => 6
-v.sms_app_hash             # => "A1b2C3d4E5f", or nil if none was stored
+v.sms_autofill             # => {"type" => "app_hash", "value" => "A1b2C3d4E5f"}, or nil
 v.sms                      # => the raw block, or nil on a callout verification
 
 v.callout_language         # => "de-DE"
@@ -127,8 +130,9 @@ default 300) and is **not** a deadline for the verification itself — manual
 entry keeps working until `expires_at`.
 `sms_code_length`/`callout_code_length` is the length of this verification's
 code, 4–8 digits, set per application (default 6).
-`sms_app_hash` is echoed back only when one was stored, so it reflects what was
-persisted rather than what was requested.
+`sms_autofill` is echoed back only when a hash was stored, so it reflects what was
+persisted rather than what was requested. `sms_app_hash` is a deprecated reader
+derived from it: the `value` when the type is `app_hash`, otherwise `nil`.
 
 ### Address by phone number
 

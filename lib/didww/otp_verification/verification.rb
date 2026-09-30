@@ -61,10 +61,18 @@ module DIDWW
         @sms && @sms["code_length"]
       end
 
-      # @return [String, nil] SMS Retriever hash, echoed back only when one was
-      #   stored on this verification.
+      # @return [Hash, nil] the stored autofill marker, +{"type" => "app_hash",
+      #   "value" => "..."}+; +nil+ unless one was stored on this verification.
+      def sms_autofill
+        @sms && @sms["autofill"]
+      end
+
+      # @deprecated Use {#sms_autofill}.
+      # @return [String, nil] the SMS Retriever hash, when the stored autofill
+      #   is of type +app_hash+.
       def sms_app_hash
-        @sms && @sms["app_hash"]
+        autofill = sms_autofill
+        autofill["value"] if autofill && autofill["type"] == "app_hash"
       end
 
       # The tag the announcement is played in: the first requested language the
