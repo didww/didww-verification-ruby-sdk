@@ -96,6 +96,20 @@ API ships it. The cost of that is no typo protection: an unrecognized option is
 ignored rather than rejected, and a misspelled key returns `201` with the
 defaults applied, not an error.
 
+### `custom:`
+
+Optional free text, up to 4096 characters, sent as top-level `data.custom` (an
+empty string counts as absent). It is not returned by the API; it reaches your
+callback server as `data.custom` in the `verification_request` body; the key is
+absent when unset.
+
+```ruby
+client.start_verification(
+  destination: "+4915112345678", delivery_method: "sms",
+  custom: "order-42"
+)
+```
+
 ### Reading a method block back
 
 The response carries the block for the method that was used, readable field by
@@ -276,6 +290,11 @@ ok = verifier.valid?(
 
 render json: { action: ok ? "allow" : "deny" }
 ```
+
+The `verification_request` body carries the `custom` value you passed to
+`start_verification` as `data.custom` (absent when unset). When the verification
+is started from a mobile app, that value is client-controlled: validate it
+against your own records rather than trusting it.
 
 The verifier also enforces a 5-minute timestamp window (configurable via
 `tolerance:`) to reject replays.

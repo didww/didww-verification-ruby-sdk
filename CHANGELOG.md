@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html): from 1.0.0 onwards a breaking change
 to the public surface requires a major version.
 
+## [1.2.0] — Unreleased
+
+### Added
+
+- **`custom:` on `start_verification`**, up to 4096 characters of free text
+  sent as top-level `data.custom` and delivered to your callback server in the
+  `verification_request` body (the key is absent when unset). It is not returned in API
+  responses.
+
 ## [1.1.0] — 2026-10
 
 ### Added

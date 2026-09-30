@@ -49,8 +49,12 @@ module DIDWW
       # reads only the block matching +delivery_method+ and ignores the others.
       # An unrecognized option is ignored rather than rejected, so a typo there
       # fails silently. Methods with no options of their own take no keyword.
-      def start_verification(destination:, delivery_method:, sms: nil, callout: nil)
+      #
+      # +custom+ is free text (up to 4096 characters) echoed back to your
+      # callback server as +data.custom+; it is not part of the response.
+      def start_verification(destination:, delivery_method:, sms: nil, callout: nil, custom: nil)
         data = {destination:, delivery_method:}
+        data[:custom] = custom unless custom.nil?
         data[:sms] = sms unless sms.nil?
         data[:callout] = callout unless callout.nil?
         request(:post, "#{API_PREFIX}/verifications", data)
