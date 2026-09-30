@@ -165,6 +165,24 @@ RSpec.describe DIDWW::OTPVerification::Client do
       expect(stub).to have_been_requested
     end
 
+    it "sends custom as a top-level field" do
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .with(body: {data: {destination: "+49", delivery_method: "sms", custom: "order-42"}})
+        .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+      build.start_verification(destination: "+49", delivery_method: "sms", custom: "order-42")
+      expect(stub).to have_been_requested
+    end
+
+    it "omits custom when it is not given" do
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .with { |req| !JSON.parse(req.body)["data"].key?("custom") }
+        .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+      build.start_verification(destination: "+49", delivery_method: "sms")
+      expect(stub).to have_been_requested
+    end
+
     # Each channel keyword is independent, so neither leaks into the other's block.
     it "sends only the blocks it was given" do
       stub = stub_request(:post, "#{base}/api/v1/verifications")
