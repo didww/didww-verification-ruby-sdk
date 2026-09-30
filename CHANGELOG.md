@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html): from 1.0.0 onwards a breaking change
 to the public surface requires a major version.
 
+## [1.1.0] — 2026-10
+
+### Added
+
+- **`code_length` on the `sms` and `callout` blocks**, readable via
+  `Verification#sms_code_length`/`#callout_code_length` — the length of the
+  generated code, 4–8 digits, set per application.
+- **`RateLimitedError` (429, `destination_in_cooldown`)**, raised when
+  `start_verification` repeats for the same app and destination inside the
+  API's cooldown window. `#retry_after` reads the `Retry-After` header in
+  seconds (`nil` if missing or unparseable). The SDK never auto-retries it.
+
+### Changed
+
+- Corrected README claims that the verification lifetime is a fixed 120 s /
+  2-minute window: it is the per-app `code_expiry` setting (60–600 s, default
+  300), which `sms_interception_timeout` also equals.
+- A 429 now raises `RateLimitedError`, an `APIError` subclass, instead of the
+  `APIError` base class. `rescue APIError` still catches it, but a strict
+  `e.instance_of?(APIError)` check no longer matches a 429.
+
 ## [1.0.0] — 2026-09
 
 First public release.
