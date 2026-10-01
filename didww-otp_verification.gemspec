@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
                      "callback signature verification."
   spec.homepage = "https://github.com/didww/didww-verification-ruby-sdk"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.1.0"
+  spec.required_ruby_version = ">= 3.3.0"
 
   # No homepage_uri: it would restate spec.homepage, and RubyGems warns on
   # metadata URIs that share a value.
