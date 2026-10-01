@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html): from 1.0.0 onwards a breaking change
 to the public surface requires a major version.
 
+## [Unreleased]
+
+### Added
+
+- **A User-Agent header.** Every request now sends
+  `User-Agent: didww-verification-ruby/<version>`.
+
 ## [1.1.0] — 2026-10
 
 ### Added

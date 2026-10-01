@@ -21,6 +21,7 @@ module DIDWW
     # Unspecified arguments fall back to DIDWW::OTPVerification.configuration.
     class Client
       API_PREFIX = "/api/v1".freeze
+      USER_AGENT = "didww-verification-ruby/#{VERSION}".freeze
 
       attr_reader :key, :auth_mode, :base_url
 
@@ -153,6 +154,8 @@ module DIDWW
           conn.request :json
           conn.response :json, content_type: /\bjson$/
           @faraday_block&.call(conn)
+          # After the caller's block, so the block cannot replace it.
+          conn.headers["User-Agent"] = USER_AGENT
           # Auth (signing) must be installed last so it sees the final request
           # bytes/headers/path, after any user middleware from @faraday_block.
           apply_auth(conn)
