@@ -22,8 +22,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.1 is the gemspec's floor; nothing else proves lib/ still parses there.
-        ruby: [ '3.1', '3.3', '3.4' ]
+        # 3.3 is the gemspec's floor and the oldest Ruby still getting security
+        # fixes (3.1 EOL 2025-03-26, 3.2 EOL 2026-03-31); 4.0 is the ceiling.
+        ruby: [ '3.3', '3.4', '4.0' ]
 
     steps:
       - name: Checkout

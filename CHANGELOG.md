@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html): from 1.0.0 onwards a breaking change
 to the public surface requires a major version.
 
+## Unreleased
+
+### Changed
+
+- **Supported Ruby is now 3.3+** (`required_ruby_version >= 3.3.0`). Ruby 3.1
+  went EOL on 2025-03-26 and 3.2 on 2026-03-31. CI tests 3.3, 3.4 and 4.0.
+
 ## [1.1.0] — 2026-10
 
 ### Added

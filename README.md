@@ -408,7 +408,7 @@ yourself; never auto-retry it.
 ## Development
 
 Development is pinned to the Ruby in `.ruby-version`; the gem itself supports
-3.1+.
+3.3+.
 
 ```sh
 bundle install
