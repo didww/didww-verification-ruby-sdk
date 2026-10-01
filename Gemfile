@@ -12,6 +12,6 @@ end
 # Rails is a dev-only dependency, used solely by the spec-rails/ integration
 # suite. It is never a runtime dependency of the gem (see gemspec).
 group :test do
-  gem "rails", "~> 7.1"
+  gem "rails", "~> 8.1"
   gem "rack-test", "~> 2.1"
 end
