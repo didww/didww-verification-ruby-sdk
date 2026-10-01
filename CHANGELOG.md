@@ -6,17 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html): from 1.0.0 onwards a breaking change
 to the public surface requires a major version.
 
-## [Unreleased]
+## [1.1.0] — 2026-10
 
 ### Added
 
 - **A User-Agent header.** Every request now sends
   `User-Agent: didww-verification-ruby/<version>`.
-
-## [1.1.0] — 2026-10
-
-### Added
-
 - **`code_length` on the `sms` and `callout` blocks**, readable via
   `Verification#sms_code_length`/`#callout_code_length` — the length of the
   generated code, 4–8 digits, set per application.
