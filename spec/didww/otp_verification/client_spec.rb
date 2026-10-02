@@ -257,6 +257,22 @@ RSpec.describe DIDWW::OTPVerification::Client do
         }.not_to output.to_stderr
         expect(stub).to have_been_requested
       end
+
+      # A nil autofill is "absent" to the server, so app_hash alongside it is not a conflict.
+      [:autofill, "autofill"].each do |key|
+        it "migrates app_hash when #{key.inspect} is nil" do
+          stub = stub_request(:post, "#{base}/api/v1/verifications")
+            .with(body: {data: {destination: "+49", delivery_method: "sms",
+                                sms: {autofill: {type: "app_hash", value: "A1b2C3d4E5f"}}}})
+            .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+          expect {
+            build.start_verification(destination: "+49", delivery_method: "sms",
+              sms: {:app_hash => "A1b2C3d4E5f", key => nil})
+          }.to output(/deprecated/).to_stderr
+          expect(stub).to have_been_requested
+        end
+      end
     end
 
     it "sends a Basic auth header by default" do
