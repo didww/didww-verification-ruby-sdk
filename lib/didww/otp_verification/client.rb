@@ -50,10 +50,16 @@ module DIDWW
       # reads only the block matching +delivery_method+ and ignores the others.
       # An unrecognized option is ignored rather than rejected, so a typo there
       # fails silently. Methods with no options of their own take no keyword.
+      #
+      # The +sms+ key +app_hash+ is deprecated: it is sent as
+      # <tt>autofill: {type: "app_hash", value: ...}</tt> with a deprecation
+      # warning. Passing it together with +autofill+ raises ArgumentError,
+      # because the API rejects that combination.
       def start_verification(destination:, delivery_method:, sms: nil, callout: nil)
         data = {destination:, delivery_method:}
         data[:sms] = sms unless sms.nil?
         data[:callout] = callout unless callout.nil?
+        data[:sms] = migrate_app_hash(data[:sms]) if data[:sms].is_a?(Hash)
         request(:post, "#{API_PREFIX}/verifications", data)
       end
 
@@ -84,6 +90,26 @@ module DIDWW
       end
 
       private
+
+      # Maps the deprecated sms +app_hash+ onto +autofill+ on a copy, so the
+      # caller's hash is left alone.
+      def migrate_app_hash(sms)
+        keys = [:app_hash, "app_hash"].select { |k| sms.key?(k) }
+        return sms if keys.empty?
+
+        # A nil hash counts as absent, as the API always treated it.
+        key = keys.find { |k| !sms[k].nil? }
+        return sms.except(*keys) unless key
+        # A nil autofill counts as absent too, as the API treats it.
+        autofill_keys = [:autofill, "autofill"].select { |k| sms.key?(k) }
+        if autofill_keys.any? { |k| !sms[k].nil? }
+          raise ArgumentError, "sms: pass either autofill or the deprecated app_hash, not both"
+        end
+
+        warn "DIDWW::OTPVerification: sms app_hash is deprecated; " \
+          "use sms: {autofill: {type: \"app_hash\", value: ...}}", category: :deprecated, uplevel: 2
+        sms.except(*keys, *autofill_keys).merge(autofill: {type: "app_hash", value: sms[key]})
+      end
 
       # Percent-encode a value for use as a single URL path segment. Notably
       # turns a leading "+" into "%2B" so it survives proxies that would
