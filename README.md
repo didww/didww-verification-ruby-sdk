@@ -71,7 +71,8 @@ reads only the block matching `delivery_method` and ignores the others.
 of an Android app — the hash identifies that app, so only the app can compute it.
 The former `app_hash:` key still works as a deprecated alias for
 `autofill: {type: "app_hash", value: ...}` (it prints a deprecation warning
-when Ruby's `:deprecated` warnings are enabled); passing both raises `ArgumentError`.
+when Ruby's `:deprecated` warnings are enabled). Passing both with non-nil values
+raises `ArgumentError`; `autofill: nil` counts as absent.
 
 ```ruby
 client.start_verification(
