@@ -37,10 +37,11 @@ RSpec.describe DIDWW::OTPVerification::CallbackVerifier do
     )
   end
 
-  def valid?(timestamp:, signature:)
-    verifier.valid?(
+  def valid?(timestamp:, signature:, previous_signature: nil, with: verifier)
+    with.valid?(
       method: "POST", path: path, content_type: "application/json",
-      body: body, timestamp: timestamp.to_s, signature: signature
+      body: body, timestamp: timestamp.to_s, signature: signature,
+      previous_signature: previous_signature
     )
   end
 
@@ -74,6 +75,51 @@ RSpec.describe DIDWW::OTPVerification::CallbackVerifier do
 
   it "rejects a missing signature" do
     expect(valid?(timestamp: now, signature: nil)).to be(false)
+  end
+
+  describe "secret rotation (x-signature-previous)" do
+    let(:old_secret) { "oLd_secret_urlsafe_base64_value_AA" }
+    let(:new_secret) { "nEw_secret_urlsafe_base64_value_AA" }
+    let(:old_signature) { DIDWW::OTPVerification::Signer.new(old_secret).sign(method: "POST", path: path, content_type: "application/json", body: body, timestamp: now.to_s) }
+    let(:new_signature) { DIDWW::OTPVerification::Signer.new(new_secret).sign(method: "POST", path: path, content_type: "application/json", body: body, timestamp: now.to_s) }
+    let(:old_verifier) { described_class.new(secret: old_secret, clock: -> { now }) }
+    let(:new_verifier) { described_class.new(secret: new_secret, clock: -> { now }) }
+
+    it "accepts the current signature with the new secret configured" do
+      expect(valid?(timestamp: now, signature: new_signature, previous_signature: old_signature, with: new_verifier)).to be(true)
+    end
+
+    it "accepts the previous signature when the old secret is still configured" do
+      expect(valid?(timestamp: now, signature: new_signature, previous_signature: old_signature, with: old_verifier)).to be(true)
+    end
+
+    it "rejects when neither signature matches the configured secret" do
+      expect(valid?(timestamp: now, signature: new_signature, previous_signature: new_signature, with: old_verifier)).to be(false)
+      expect(valid?(timestamp: now, signature: "bad", previous_signature: "also-bad", with: new_verifier)).to be(false)
+    end
+
+    it "behaves as before when the previous signature is nil or empty" do
+      [nil, ""].each do |prev|
+        expect(valid?(timestamp: now, signature: new_signature, previous_signature: prev, with: new_verifier)).to be(true)
+        expect(valid?(timestamp: now, signature: new_signature, previous_signature: prev, with: old_verifier)).to be(false)
+      end
+    end
+
+    it "still rejects a stale timestamp even when the previous signature matches" do
+      stale = now - 301
+      signature = DIDWW::OTPVerification::Signer.new(old_secret).sign(method: "POST", path: path, content_type: "application/json", body: body, timestamp: stale.to_s)
+      expect(valid?(timestamp: stale, signature: "x", previous_signature: signature, with: old_verifier)).to be(false)
+    end
+
+    it "still requires the Authorization signature" do
+      expect(valid?(timestamp: now, signature: nil, previous_signature: old_signature, with: old_verifier)).to be(false)
+    end
+
+    it "compares both signatures in constant time" do
+      allow(OpenSSL).to receive(:fixed_length_secure_compare).and_call_original
+      valid?(timestamp: now, signature: old_signature, previous_signature: old_signature, with: old_verifier)
+      expect(OpenSSL).to have_received(:fixed_length_secure_compare).twice
+    end
   end
 
   describe ".parse_authorization" do

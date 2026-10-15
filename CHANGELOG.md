@@ -8,6 +8,14 @@ to the public surface requires a major version.
 
 ## Unreleased
 
+### Added
+
+- **Secret rotation support in callback verification.** During a secret rotation
+  the service also sends an `x-signature-previous` header, signed with the previous
+  secret. `CallbackVerifier#valid?` takes an optional `previous_signature:` and accepts
+  the callback when either signature matches the configured secret.
+  `RailsCallbackVerifier` reads the header itself. Upgrade the SDK before rotating a secret.
+
 ### Changed
 
 - **Supported Ruby is now 3.3+** (`required_ruby_version >= 3.3.0`). Ruby 3.1

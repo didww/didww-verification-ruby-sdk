@@ -273,7 +273,8 @@ ok = verifier.valid?(
   content_type: request.content_type,
   body:         request.raw_post,         # RAW body bytes — do not re-serialize
   timestamp:    request.headers["x-timestamp"],
-  signature:    signature
+  signature:    signature,
+  previous_signature: request.headers["x-signature-previous"]  # optional
 )
 
 render json: { action: ok ? "allow" : "deny" }
@@ -281,6 +282,20 @@ render json: { action: ok ? "allow" : "deny" }
 
 The verifier also enforces a 5-minute timestamp window (configurable via
 `tolerance:`) to reject replays.
+
+### Rotating the application secret
+
+While a rotated-out secret is still valid, DIDWW also sends an
+`x-signature-previous` header: the same signature computed with the previous
+secret. The verifier accepts a callback when either the `Authorization`
+signature or `previous_signature` matches the secret you configured. A receiver
+can therefore switch from the old secret to the new one at any point during the
+grace period, with no failed callbacks. Without the header the verifier behaves
+as before.
+
+Upgrade the SDK before you rotate a secret, because an older version ignores
+`x-signature-previous` and rejects callbacks signed with the new secret while
+the old one is configured.
 
 ### Rails
 

@@ -47,7 +47,8 @@ module DIDWW
           content_type: request.content_type,
           body: request.raw_post,
           timestamp: request.headers["x-timestamp"],
-          signature: signature
+          signature: signature,
+          previous_signature: request.headers["x-signature-previous"]
         )
       end
     end
