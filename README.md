@@ -167,6 +167,14 @@ DIDWW::OTPVerification.configure do |c|
 end
 ```
 
+## Testing
+
+Use the sandbox environment (`env: :sandbox`) with the reserved test numbers.
+`+12015550100` to `+12015550109` always succeed: the code is `1` repeated to the
+application's code length, for example `111111` for six digits. Other reserved ranges
+simulate failures. The full table is in
+[Testing on sandbox](https://doc.didww.com/otp-verification/testing.html).
+
 ## Configuration
 
 Set global defaults; every field is overridable per `Client`.
@@ -335,7 +343,7 @@ carries `error_code` (switch on it) and `error_detail` (display it). These are
 | ---------- | -------- | -------------------------------------------------------------------------------------------- |
 | `pending`  | no       | `nil` — on its way, or awaiting a report                                                       |
 | `verified` | yes      | `nil`                                                                                          |
-| `failed`   | yes      | `too_many_attempts`, `dispatch_failed`, `stale_dispatch`, `superseded`, `application_deleted`   |
+| `failed`   | yes      | `too_many_attempts`, `dispatch_failed`, `superseded`, `application_deleted`   |
 | `expired`  | yes      | `expired` — past the application's code lifetime (60–600 s, default 300)                       |
 | `denied`   | yes      | `denied_by_callback`, `denied_missing_callback_url`, `denied_invalid_callback_response`         |
 

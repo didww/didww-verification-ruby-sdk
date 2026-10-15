@@ -6,7 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html): from 1.0.0 onwards a breaking change
 to the public surface requires a major version.
 
-## Unreleased
+## [1.1.1] — 2026-10
+
+### Removed
+
+- **The `stale_dispatch` error code** from the documented outcomes. The API
+  reports these failures as `dispatch_failed`. `error_code` is a plain string,
+  so a response that still carries `stale_dispatch` reads as before.
+
+### Docs
+
+- A Testing section on the sandbox environment and its reserved test numbers.
 
 ### Changed
 
