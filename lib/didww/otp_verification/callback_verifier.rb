@@ -19,7 +19,8 @@ module DIDWW
     #   verifier.valid?(
     #     method: "POST", path: "/callbacks/didww",
     #     content_type: "application/json", body: raw_body,
-    #     timestamp: request.headers["x-timestamp"], signature: signature
+    #     timestamp: request.headers["x-timestamp"], signature: signature,
+    #     previous_signature: request.headers["x-signature-previous"]
     #   )
     class CallbackVerifier
       # @param tolerance [Integer] max allowed clock skew, in seconds (server uses 5 minutes).
@@ -41,16 +42,21 @@ module DIDWW
         [key, signature]
       end
 
-      # @return [Boolean] true when both the timestamp is fresh and the
-      #   signature matches (constant-time comparison).
-      def valid?(method:, path:, content_type:, body:, timestamp:, signature:)
+      # @param previous_signature [String, nil] the `x-signature-previous` header, sent
+      #   during a secret rotation and signed with the previous secret. Ignored when absent.
+      # @return [Boolean] true when the timestamp is fresh and the signature, or the
+      #   previous signature, matches (constant-time comparison).
+      def valid?(method:, path:, content_type:, body:, timestamp:, signature:, previous_signature: nil)
         return false if Util.blank?(signature)
         return false unless fresh?(timestamp)
 
         expected = @signer.sign(
           method:, path:, content_type:, body:, timestamp: timestamp
         )
-        secure_compare(expected, signature)
+        # Both comparisons always run, so timing does not reveal which header matched.
+        current = secure_compare(expected, signature)
+        previous = secure_compare(expected, previous_signature)
+        current || previous
       end
 
       private
@@ -63,6 +69,7 @@ module DIDWW
 
       # Constant-time string comparison via the audited stdlib implementation.
       def secure_compare(a, b)
+        return false if b.nil?
         return false unless a.bytesize == b.bytesize
 
         OpenSSL.fixed_length_secure_compare(a, b)

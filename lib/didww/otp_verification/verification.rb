@@ -61,10 +61,40 @@ module DIDWW
         @sms && @sms["code_length"]
       end
 
-      # @return [String, nil] SMS Retriever hash, echoed back only when one was
-      #   stored on this verification.
+      # @return [Hash, nil] the stored autofill marker, +{"type", "value"}+ with
+      #   type +app_hash+ (value: the hash) or +domain+ (value: the domain);
+      #   +nil+ unless one was stored on this verification.
+      def sms_autofill
+        @sms && @sms["autofill"]
+      end
+
+      # @deprecated Use {#sms_autofill}.
+      # @return [String, nil] the SMS Retriever hash, when the stored autofill
+      #   is of type +app_hash+.
       def sms_app_hash
-        @sms && @sms["app_hash"]
+        autofill = sms_autofill
+        return @sms && @sms["app_hash"] unless autofill
+
+        autofill["value"] if autofill["type"] == "app_hash"
+      end
+
+      # @return [String, nil] the template group applied; nil when none applies
+      #   or it no longer exists. Only present for the +sms+ method.
+      def sms_template_group
+        @sms && @sms["template_group"]
+      end
+
+      # @return [Boolean, nil] true when the group's template was used. Only
+      #   present for the +sms+ method.
+      def sms_template_group_used
+        @sms && @sms["template_group_used"]
+      end
+
+      # @return [String, nil] why the group's template was not used, e.g.
+      #   +language_missing+ (an open set); nil when it was or when no group
+      #   applies. Only present for the +sms+ method.
+      def sms_template_fallback_reason
+        @sms && @sms["template_fallback_reason"]
       end
 
       # The tag the announcement is played in: the first requested language the
@@ -81,6 +111,25 @@ module DIDWW
       #   (set per application). Only present for the +callout+ method.
       def callout_code_length
         @callout && @callout["code_length"]
+      end
+
+      # @return [String, nil] the template group applied; nil when none applies
+      #   or it no longer exists. Only present for the +callout+ method.
+      def callout_template_group
+        @callout && @callout["template_group"]
+      end
+
+      # @return [Boolean, nil] true when the group's template was used. Only
+      #   present for the +callout+ method.
+      def callout_template_group_used
+        @callout && @callout["template_group_used"]
+      end
+
+      # @return [String, nil] why the group's template was not used, e.g.
+      #   +audio_not_ready+ (an open set); nil when it was or when no group
+      #   applies. Only present for the +callout+ method.
+      def callout_template_fallback_reason
+        @callout && @callout["template_fallback_reason"]
       end
 
       def pending? = status == "pending"

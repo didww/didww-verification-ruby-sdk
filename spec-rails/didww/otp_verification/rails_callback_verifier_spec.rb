@@ -21,12 +21,14 @@ RSpec.describe DIDWW::OTPVerification::RailsCallbackVerifier do
 
   # Issues the callback POST the way DIDWW would: raw JSON body plus the signed
   # Authorization / x-timestamp headers.
-  def post_callback(signature:, timestamp:, request_body: body)
-    post path, request_body, {
+  def post_callback(signature:, timestamp:, request_body: body, previous_signature: nil)
+    env = {
       "CONTENT_TYPE" => "application/json",
       "HTTP_AUTHORIZATION" => "Application #{key}:#{signature}",
       "HTTP_X_TIMESTAMP" => timestamp.to_s
     }
+    env["HTTP_X_SIGNATURE_PREVIOUS"] = previous_signature if previous_signature
+    post path, request_body, env
   end
 
   it "passes the before_action and returns allow for a valid, matching callback" do
@@ -35,6 +37,21 @@ RSpec.describe DIDWW::OTPVerification::RailsCallbackVerifier do
 
     expect(last_response.status).to eq(200)
     expect(JSON.parse(last_response.body)).to eq("action" => "allow")
+  end
+
+  it "accepts a callback signed with the new secret when the x-signature-previous matches the configured one" do
+    ts = Time.now.to_i
+    post_callback(signature: "signed-with-the-new-secret", previous_signature: sign(ts), timestamp: ts)
+
+    expect(last_response.status).to eq(200)
+    expect(JSON.parse(last_response.body)).to eq("action" => "allow")
+  end
+
+  it "responds 401 when neither Authorization nor x-signature-previous matches" do
+    ts = Time.now.to_i
+    post_callback(signature: "bad", previous_signature: "also-bad", timestamp: ts)
+
+    expect(last_response.status).to eq(401)
   end
 
   it "passes the before_action but returns deny when params don't match" do
