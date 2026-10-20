@@ -38,8 +38,8 @@ to the public surface requires a major version.
   from this IP address), `rate_limit_per_account` (too many requests for this
   account), `rate_limit_public_per_account` (too many public requests for this
   account) and `volume_limit_reached` (the application reached its daily or
-  monthly verification limit for this delivery method; `Retry-After` can be
-  days, so surface it instead of retrying). All raise `RateLimitedError`.
+  monthly verification limit; `Retry-After` can be days, so surface it instead
+  of retrying). All raise `RateLimitedError`.
 - **New outcome codes:** `application_paused` and `destination_country_disabled`
   (status `denied`).
 
@@ -64,6 +64,11 @@ to the public surface requires a major version.
   reports these verifications as `dispatch_failed`. It stays documented so
   existing matches keep working, and will be dropped from the docs in the next
   major version.
+
+### Docs
+
+- A Testing section on the sandbox environment, which sends nothing and gives
+  an outcome only for the reserved test numbers.
 
 ## [1.1.0] — 2026-10
 

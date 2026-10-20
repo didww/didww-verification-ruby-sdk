@@ -207,6 +207,15 @@ DIDWW::OTPVerification.configure do |c|
 end
 ```
 
+## Testing
+
+The sandbox sends no real SMS and places no real calls. Only the reserved test
+numbers get an outcome, each with a fixed result such as delivered, failed or
+expired; a delivered one has a fixed code. A verification to any other number
+ends with status `failed` and error code `dispatch_failed`. The test numbers,
+their outcomes and the code to submit are listed in
+[Testing on sandbox](https://doc.didww.com/otp-verification/testing.html).
+
 ## Configuration
 
 Set global defaults; every field is overridable per `Client`.
@@ -479,9 +488,8 @@ A 429 raises `RateLimitedError`, and its code says which limit was hit:
 - `rate_limit_per_account`: too many requests for this account.
 - `rate_limit_public_per_account`: too many public requests for this account.
 - `volume_limit_reached`: the application reached its daily or monthly
-  verification limit for this delivery method. `Retry-After` can be long
-  (days) — surface it to the user instead of retrying. Contact support to raise
-  the limit.
+  verification limit. `Retry-After` can be long (days) — surface it to the
+  user instead of retrying. Contact support to raise the limit.
 
 `#retry_after` gives the wait in seconds (`nil` if the `Retry-After` header is
 missing or unparseable) — wait that long before trying again yourself; never
