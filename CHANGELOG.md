@@ -68,7 +68,7 @@ to the public surface requires a major version.
 ### Docs
 
 - A Testing section on the sandbox environment, which sends nothing and gives
-  an outcome only for the reserved test numbers.
+  a predefined result only for the reserved test numbers.
 
 ## [1.1.0] — 2026-10
 

@@ -210,10 +210,10 @@ end
 ## Testing
 
 The sandbox sends no real SMS and places no real calls. Only the reserved test
-numbers get an outcome, each with a fixed result such as delivered, failed or
-expired; a delivered one has a fixed code. A verification to any other number
-ends with status `failed` and error code `dispatch_failed`. The test numbers,
-their outcomes and the code to submit are listed in
+numbers give a predefined result, such as delivered, failed or expired; a
+delivered one has a fixed code. Any other number is never delivered to, and its
+verification ends as failed. The test numbers, their outcomes and the code to
+submit are listed in
 [Testing on sandbox](https://doc.didww.com/otp-verification/testing.html).
 
 ## Configuration
