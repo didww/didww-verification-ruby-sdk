@@ -65,15 +65,23 @@ reads only the block matching `delivery_method` and ignores the others.
 | Field       | Description                                                                                                                                                                   |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `languages` | Preferred template languages as BCP 47 tags, most preferred first. Matched exactly, so the region subtag is required — `"pl"` does not match `pl-PL`. Unmatched tags fall back to `en-US`. |
-| `app_hash`  | Android SMS Retriever hash: exactly 11 characters of `[A-Za-z0-9+/]`. The delivered message is then prefixed with `<#> ` and the hash appended as its last token, so the handset can auto-fill the code. Omit it on every other platform. |
+| `autofill`  | Auto-fill marker for the delivered message. `{type: "app_hash", value: "..."}` is the Android SMS Retriever hash: exactly 11 characters of `[A-Za-z0-9+/]`. The message is then prefixed with `<#> ` and the hash appended as its last token, so the handset can auto-fill the code. `{type: "domain"}` adds a domain-bound line for the application's configured SMS domain. `{type: "none"}` explicitly asks for no marker. Omit it to use the application default. |
+| `template_group` | Name of one of your template groups, used instead of the application's default. |
 
-`app_hash` is here because a Ruby backend often starts the verification on behalf
+`autofill` is here because a Ruby backend often starts the verification on behalf
 of an Android app — the hash identifies that app, so only the app can compute it.
+`{type: "domain"}` takes no `value`; on an application with no SMS domain it is
+refused with `sms_domain_not_configured`. A malformed `autofill` is refused with
+`autofill_invalid`.
+The former `app_hash:` key still works as a deprecated alias for
+`autofill: {type: "app_hash", value: ...}` (it prints a deprecation warning
+when Ruby's `:deprecated` warnings are enabled). Passing both with non-nil values
+raises `ArgumentError`; `autofill: nil` counts as absent.
 
 ```ruby
 client.start_verification(
   destination: "+4915112345678", delivery_method: "sms",
-  sms: {languages: ["en-US"], app_hash: "A1b2C3d4E5f"}
+  sms: {languages: ["en-US"], autofill: {type: "app_hash", value: "A1b2C3d4E5f"}}
 )
 ```
 
@@ -82,6 +90,10 @@ client.start_verification(
 | Field       | Description                                                                                                                                                                   |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `languages` | Preferred announcement languages — the same tags, order and matching rules as the `sms:` ones, so the same list is valid for either method. It is not shared between them, though: each method reads only its own block, so the list goes under `callout:` here and under `sms:` there. The catalogues are separate too, so a tag that has a message template but no recording is accepted and falls back to `en-US`. |
+| `template_group` | Name of one of your template groups, as for `sms:`. |
+
+An unknown `template_group` on either method is refused with
+`template_group_not_found`.
 
 ```ruby
 client.start_verification(
@@ -96,6 +108,20 @@ API ships it. The cost of that is no typo protection: an unrecognized option is
 ignored rather than rejected, and a misspelled key returns `201` with the
 defaults applied, not an error.
 
+### `custom:`
+
+Optional free text, up to 4096 characters, sent as top-level `data.custom` (an
+empty string counts as absent). It is not returned by the API; it reaches your
+callback server as `data.custom` in the `verification_request` body; the key is
+absent when unset. A longer value is refused with `custom_too_long`.
+
+```ruby
+client.start_verification(
+  destination: "+4915112345678", delivery_method: "sms",
+  custom: "order-42"
+)
+```
+
 ### Reading a method block back
 
 The response carries the block for the method that was used, readable field by
@@ -106,11 +132,17 @@ v.sms_template             # => "Your code is {{CODE}}"
 v.sms_language             # => "en-US"
 v.sms_interception_timeout # => 300
 v.sms_code_length          # => 6
-v.sms_app_hash             # => "A1b2C3d4E5f", or nil if none was stored
+v.sms_autofill             # => {"type" => "app_hash", "value" => "A1b2C3d4E5f"}, or nil
+v.sms_template_group       # => "checkout", or nil if none applied
+v.sms_template_group_used  # => true
+v.sms_template_fallback_reason # => nil, or e.g. "language_missing"
 v.sms                      # => the raw block, or nil on a callout verification
 
 v.callout_language         # => "de-DE"
 v.callout_code_length      # => 6
+v.callout_template_group   # => "checkout", or nil if none applied
+v.callout_template_group_used # => true
+v.callout_template_fallback_reason # => nil, or e.g. "audio_not_ready"
 v.callout                  # => the raw block, or nil on an sms verification
 ```
 
@@ -127,8 +159,16 @@ default 300) and is **not** a deadline for the verification itself — manual
 entry keeps working until `expires_at`.
 `sms_code_length`/`callout_code_length` is the length of this verification's
 code, 4–8 digits, set per application (default 6).
-`sms_app_hash` is echoed back only when one was stored, so it reflects what was
-persisted rather than what was requested.
+`sms_autofill` is echoed back only when a hash or domain marker was stored, so it
+reflects what was persisted rather than what was requested; for `domain`, `value`
+is the domain. `sms_app_hash` is a deprecated reader derived from it: the `value`
+when the type is `app_hash`, otherwise `nil`.
+`*_template_group_used` is true when the group's template was used. When it is
+false, `*_template_fallback_reason` says why: `language_missing`,
+`version_pending`, `version_rejected`, `audio_not_ready` or `group_missing` (the
+group no longer exists; `*_template_group` is then `nil`). Both are false/`nil`
+when no template group applies at all. Like error codes, the reasons are an open
+set of plain strings.
 
 ### Address by phone number
 
@@ -166,6 +206,15 @@ DIDWW::OTPVerification.configure do |c|
   c.env = :sandbox
 end
 ```
+
+## Testing
+
+The sandbox sends no real SMS and places no real calls. Only the reserved test
+numbers give a predefined result, such as delivered, failed or expired; a
+delivered one has a fixed code. Any other number is never delivered to, and its
+verification ends as failed. The test numbers, their outcomes and the code to
+submit are listed in
+[Testing on sandbox](https://doc.didww.com/otp-verification/testing.html).
 
 ## Configuration
 
@@ -273,14 +322,34 @@ ok = verifier.valid?(
   content_type: request.content_type,
   body:         request.raw_post,         # RAW body bytes — do not re-serialize
   timestamp:    request.headers["x-timestamp"],
-  signature:    signature
+  signature:    signature,
+  previous_signature: request.headers["x-signature-previous"]  # optional
 )
 
 render json: { action: ok ? "allow" : "deny" }
 ```
 
+The `verification_request` body carries the `custom` value you passed to
+`start_verification` as `data.custom` (absent when unset). When the verification
+is started from a mobile app, that value is client-controlled: validate it
+against your own records rather than trusting it.
+
 The verifier also enforces a 5-minute timestamp window (configurable via
 `tolerance:`) to reject replays.
+
+### Rotating the application secret
+
+While a rotated-out secret is still valid, DIDWW also sends an
+`x-signature-previous` header: the same signature computed with the previous
+secret. The verifier accepts a callback when either the `Authorization`
+signature or `previous_signature` matches the secret you configured. A receiver
+can therefore switch from the old secret to the new one at any point during the
+grace period, with no failed callbacks. Without the header the verifier behaves
+as before.
+
+Upgrade the SDK before you rotate a secret, because an older version ignores
+`x-signature-previous` and rejects callbacks signed with the new secret while
+the old one is configured.
 
 ### Rails
 
@@ -335,12 +404,22 @@ carries `error_code` (switch on it) and `error_detail` (display it). These are
 | ---------- | -------- | -------------------------------------------------------------------------------------------- |
 | `pending`  | no       | `nil` — on its way, or awaiting a report                                                       |
 | `verified` | yes      | `nil`                                                                                          |
-| `failed`   | yes      | `too_many_attempts`, `dispatch_failed`, `stale_dispatch`, `superseded`, `application_deleted`   |
+| `failed`   | yes      | `too_many_attempts`, `dispatch_failed`, `superseded`, `application_deleted`, `destination_not_supported_for_channel`, `stale_dispatch` (deprecated) |
 | `expired`  | yes      | `expired` — past the application's code lifetime (60–600 s, default 300)                       |
-| `denied`   | yes      | `denied_by_callback`, `denied_missing_callback_url`, `denied_invalid_callback_response`         |
+| `denied`   | yes      | `denied_by_callback`, `denied_missing_callback_url`, `denied_invalid_callback_response`, `application_paused`, `destination_country_disabled` |
 
 `superseded` means a newer `start_verification` for the same number retired this
 one — only the newest verification per number stays active.
+
+Some starts are refused as an outcome rather than an error: a `201` whose status
+is `denied` (`application_paused`, `destination_country_disabled`) or `failed`
+(`destination_not_supported_for_channel`: the number has no supported country,
+can't be reached by this delivery method, or is in a blocked range). Earlier
+versions returned the last one as a `422`; that code stays in the error list for
+compatibility only.
+
+`stale_dispatch` is deprecated: the service no longer sends it and reports these
+verifications as `dispatch_failed`.
 
 ```ruby
 v = client.get_verification(id)
@@ -370,7 +449,7 @@ Non-2xx responses raise a typed error under `DIDWW::OTPVerification::Error`:
 | `BalanceInsufficientError` | 402       | `balance_insufficient`                |
 | `NotFoundError`            | 404       | `not_found`                           |
 | `ValidationError`          | 400 / 422 | `parameter_missing` / per-field codes |
-| `RateLimitedError`         | 429       | `destination_in_cooldown`             |
+| `RateLimitedError`         | 429       | `destination_in_cooldown`, `rate_limit_*`, `volume_limit_reached` |
 | `ServerError`              | 5xx       | `internal_error`                      |
 
 Every error carries the API's coded envelope: `#errors` is an array of
@@ -399,11 +478,22 @@ end
 The SDK does **not** auto-retry. If you add `faraday-retry`, exclude `POST`
 (double-charges) and `PATCH` (each report counts against the 3-attempt limit).
 
-A `start_verification` repeated too soon for the same app and destination
-raises `RateLimitedError` (429, `destination_in_cooldown`) — a short per-number
-cooldown (currently 30 s). `#retry_after` gives the wait in seconds (`nil` if
-the `Retry-After` header is missing or unparseable) — wait and call again
-yourself; never auto-retry it.
+A 429 raises `RateLimitedError`, and its code says which limit was hit:
+
+- `destination_in_cooldown`: a verification for this destination was requested
+  too recently.
+- `rate_limit_per_ip`: too many requests from this IP address.
+- `rate_limit_failed_auth`: too many failed authentication attempts from this
+  IP address.
+- `rate_limit_per_account`: too many requests for this account.
+- `rate_limit_public_per_account`: too many public requests for this account.
+- `volume_limit_reached`: the application reached its daily or monthly
+  verification limit. `Retry-After` can be long (days) — surface it to the
+  user instead of retrying. Contact support to raise the limit.
+
+`#retry_after` gives the wait in seconds (`nil` if the `Retry-After` header is
+missing or unparseable) — wait that long before trying again yourself; never
+auto-retry it.
 
 ## Development
 

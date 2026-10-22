@@ -6,12 +6,69 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html): from 1.0.0 onwards a breaking change
 to the public surface requires a major version.
 
-## Unreleased
+## [1.2.0] — 2026-10
+
+### Added
+
+- **`custom:` on `start_verification`**, up to 4096 characters of free text sent
+  as top-level `data.custom` and delivered unchanged to your callback server in
+  the `verification_request` body (the key is absent when unset). It is not
+  returned in API responses. A longer value is refused with the new
+  `custom_too_long` error code.
+- **`sms: {autofill: ...}`** with type `app_hash`, `domain` or `none`.
+  `Verification#sms_autofill` reads back the stored marker, `app_hash` or
+  `domain`, whose `value` is the hash or the domain. New error codes
+  `autofill_invalid` and `sms_domain_not_configured`.
+- **`template_group` in the `sms:` and `callout:` options**, to pick a template
+  group instead of the application's default. New readers
+  `Verification#sms_template_group`/`#callout_template_group`,
+  `#sms_template_group_used`/`#callout_template_group_used` and
+  `#sms_template_fallback_reason`/`#callout_template_fallback_reason`; the last
+  is an open set (`language_missing`, `version_pending`, `version_rejected`,
+  `audio_not_ready`, `group_missing`). An unknown group is refused with the new
+  `template_group_not_found` error code.
+- **Secret rotation support in callback verification.** During a secret
+  rotation the service also sends an `x-signature-previous` header, signed with
+  the previous secret. `CallbackVerifier#valid?` takes an optional
+  `previous_signature:` and accepts the callback when either signature matches
+  the configured secret. `RailsCallbackVerifier` reads the header itself.
+  Upgrade the SDK before rotating a secret.
+- **New 429 error codes:** `rate_limit_per_ip` (too many requests from this IP
+  address), `rate_limit_failed_auth` (too many failed authentication attempts
+  from this IP address), `rate_limit_per_account` (too many requests for this
+  account), `rate_limit_public_per_account` (too many public requests for this
+  account) and `volume_limit_reached` (the application reached its daily or
+  monthly verification limit; `Retry-After` can be days, so surface it instead
+  of retrying). All raise `RateLimitedError`.
+- **New outcome codes:** `application_paused` and `destination_country_disabled`
+  (status `denied`).
 
 ### Changed
 
+- **`destination_not_supported_for_channel` is now an outcome, not a 422.** A
+  start for a number with no supported country, no delivery for the requested
+  method, or in a blocked range returns `201` with status `failed` and this
+  `error_code`. Code that rescued the 422 now gets a failed verification
+  instead. The error code stays in the list for compatibility.
+
 - **Supported Ruby is now 3.3+** (`required_ruby_version >= 3.3.0`). Ruby 3.1
   went EOL on 2025-03-26 and 3.2 on 2026-03-31. CI tests 3.3, 3.4 and 4.0.
+
+### Deprecated
+
+- **The `sms: {app_hash: ...}` option and `Verification#sms_app_hash`.** Use
+  `autofill`. The option is sent as `autofill: {type: "app_hash", value: ...}`
+  with a `:deprecated` warning; passing it together with a non-nil `autofill`
+  raises `ArgumentError`.
+- **The `stale_dispatch` outcome code.** The service no longer sends it and
+  reports these verifications as `dispatch_failed`. It stays documented so
+  existing matches keep working, and will be dropped from the docs in the next
+  major version.
+
+### Docs
+
+- A Testing section on the sandbox environment, which sends nothing and gives
+  a predefined result only for the reserved test numbers.
 
 ## [1.1.0] — 2026-10
 

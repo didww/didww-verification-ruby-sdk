@@ -48,8 +48,10 @@ module DIDWW
     # 400 Bad Request / 422 Unprocessable Content (validation errors in +errors+).
     class ValidationError < APIError; end
 
-    # 429 Too Many Requests (+destination_in_cooldown+ code): a start_verification
-    # for the same app and destination landed within the API's cooldown window.
+    # 429 Too Many Requests. +code+ says which limit was hit:
+    # +destination_in_cooldown+ (this destination was requested too recently),
+    # a +rate_limit_*+ request limit, or +volume_limit_reached+ (a daily or
+    # monthly limit; +retry_after+ can be days).
     # Never auto-retry this.
     class RateLimitedError < APIError
       # @return [Integer, nil] seconds to wait, from the Retry-After header.

@@ -165,6 +165,46 @@ RSpec.describe DIDWW::OTPVerification::Client do
       expect(stub).to have_been_requested
     end
 
+    it "sends custom as a top-level field" do
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .with(body: {data: {destination: "+49", delivery_method: "sms", custom: "order-42"}})
+        .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+      build.start_verification(destination: "+49", delivery_method: "sms", custom: "order-42")
+      expect(stub).to have_been_requested
+    end
+
+    it "omits custom when it is not given" do
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .with { |req| !JSON.parse(req.body)["data"].key?("custom") }
+        .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+      build.start_verification(destination: "+49", delivery_method: "sms")
+      expect(stub).to have_been_requested
+    end
+
+    it "sends template_group inside the sms and callout objects" do
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .with(body: {data: {destination: "+49", delivery_method: "callout",
+                            sms: {template_group: "checkout"}, callout: {template_group: "checkout"}}})
+        .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+      build.start_verification(destination: "+49", delivery_method: "callout",
+        sms: {template_group: "checkout"}, callout: {template_group: "checkout"})
+      expect(stub).to have_been_requested
+    end
+
+    it "sends custom alongside sms autofill" do
+      stub = stub_request(:post, "#{base}/api/v1/verifications")
+        .with(body: {data: {destination: "+49", delivery_method: "sms", custom: "order-42",
+                            sms: {autofill: {type: "domain"}}}})
+        .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+      build.start_verification(destination: "+49", delivery_method: "sms",
+        sms: {autofill: {type: "domain"}}, custom: "order-42")
+      expect(stub).to have_been_requested
+    end
+
     # Each channel keyword is independent, so neither leaks into the other's block.
     it "sends only the blocks it was given" do
       stub = stub_request(:post, "#{base}/api/v1/verifications")
@@ -178,15 +218,114 @@ RSpec.describe DIDWW::OTPVerification::Client do
       expect(stub).to have_been_requested
     end
 
-    it "sends languages and app_hash inside the sms object" do
+    it "sends languages and autofill inside the sms object" do
       stub = stub_request(:post, "#{base}/api/v1/verifications")
         .with(body: {data: {destination: "+49", delivery_method: "sms",
-                            sms: {languages: ["en-US"], app_hash: "A1b2C3d4E5f"}}})
+                            sms: {languages: ["en-US"], autofill: {type: "app_hash", value: "A1b2C3d4E5f"}}}})
         .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
 
       build.start_verification(destination: "+49", delivery_method: "sms",
-        sms: {languages: ["en-US"], app_hash: "A1b2C3d4E5f"})
+        sms: {languages: ["en-US"], autofill: {type: "app_hash", value: "A1b2C3d4E5f"}})
       expect(stub).to have_been_requested
+    end
+
+    context "deprecated app_hash" do
+      # Ruby hides :deprecated warnings unless the category is enabled.
+      around do |example|
+        previous = Warning[:deprecated]
+        Warning[:deprecated] = true
+        example.run
+      ensure
+        Warning[:deprecated] = previous
+      end
+
+      [:app_hash, "app_hash"].each do |key|
+        it "maps a #{key.inspect} key onto autofill and warns" do
+          stub = stub_request(:post, "#{base}/api/v1/verifications")
+            .with(body: {data: {destination: "+49", delivery_method: "sms",
+                                sms: {languages: ["en-US"], autofill: {type: "app_hash", value: "A1b2C3d4E5f"}}}})
+            .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+          expect {
+            build.start_verification(destination: "+49", delivery_method: "sms",
+              sms: {:languages => ["en-US"], key => "A1b2C3d4E5f"})
+          }.to output(/app_hash.*deprecated/).to_stderr
+          expect(stub).to have_been_requested
+        end
+      end
+
+      it "does not mutate the caller's sms hash" do
+        stub_request(:post, "#{base}/api/v1/verifications")
+          .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+        sms = {app_hash: "A1b2C3d4E5f"}
+
+        expect { build.start_verification(destination: "+49", delivery_method: "sms", sms: sms) }
+          .to output.to_stderr
+        expect(sms).to eq(app_hash: "A1b2C3d4E5f")
+      end
+
+      it "raises when both app_hash and autofill are given" do
+        expect {
+          build.start_verification(destination: "+49", delivery_method: "sms",
+            sms: {app_hash: "A1b2C3d4E5f", autofill: {type: "none"}})
+        }.to raise_error(ArgumentError, /autofill.*app_hash/)
+      end
+
+      # A nil app_hash was always "absent" to the server; it must stay so.
+      [:app_hash, "app_hash"].each do |key|
+        it "drops a nil #{key.inspect} silently" do
+          stub = stub_request(:post, "#{base}/api/v1/verifications")
+            .with(body: {data: {destination: "+49", delivery_method: "sms", sms: {languages: ["en-US"]}}})
+            .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+          expect {
+            build.start_verification(destination: "+49", delivery_method: "sms",
+              sms: {:languages => ["en-US"], key => nil})
+          }.not_to output.to_stderr
+          expect(stub).to have_been_requested
+        end
+      end
+
+      it "keeps autofill when app_hash is nil" do
+        stub = stub_request(:post, "#{base}/api/v1/verifications")
+          .with(body: {data: {destination: "+49", delivery_method: "sms", sms: {autofill: {type: "none"}}}})
+          .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+        expect {
+          build.start_verification(destination: "+49", delivery_method: "sms",
+            sms: {app_hash: nil, autofill: {type: "none"}})
+        }.not_to output.to_stderr
+        expect(stub).to have_been_requested
+      end
+
+      it "passes the sms hash through untouched for another delivery method" do
+        stub = stub_request(:post, "#{base}/api/v1/verifications")
+          .with(body: {data: {destination: "+49", delivery_method: "callout",
+                              sms: {app_hash: "A1b2C3d4E5f", autofill: {type: "none"}}}})
+          .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+        expect {
+          build.start_verification(destination: "+49", delivery_method: "callout",
+            sms: {app_hash: "A1b2C3d4E5f", autofill: {type: "none"}})
+        }.not_to output.to_stderr
+        expect(stub).to have_been_requested
+      end
+
+      # A nil autofill is "absent" to the server, so app_hash alongside it is not a conflict.
+      [:autofill, "autofill"].each do |key|
+        it "migrates app_hash when #{key.inspect} is nil" do
+          stub = stub_request(:post, "#{base}/api/v1/verifications")
+            .with(body: {data: {destination: "+49", delivery_method: "sms",
+                                sms: {autofill: {type: "app_hash", value: "A1b2C3d4E5f"}}}})
+            .to_return(status: 201, body: verification_body.to_json, headers: {"Content-Type" => "application/json"})
+
+          expect {
+            build.start_verification(destination: "+49", delivery_method: "sms",
+              sms: {:app_hash => "A1b2C3d4E5f", key => nil})
+          }.to output(/deprecated/).to_stderr
+          expect(stub).to have_been_requested
+        end
+      end
     end
 
     it "sends a Basic auth header by default" do
@@ -338,20 +477,38 @@ RSpec.describe DIDWW::OTPVerification::Client do
 
     it "reads every field of a full sms block" do
       v = get_with_sms("template" => "Your code is {{CODE}}", "language" => "de-DE",
-        "interception_timeout" => 300, "code_length" => 6, "app_hash" => "A1b2C3d4E5f")
+        "interception_timeout" => 300, "code_length" => 6,
+        "autofill" => {"type" => "app_hash", "value" => "A1b2C3d4E5f"},
+        "template_group" => "checkout", "template_group_used" => false,
+        "template_fallback_reason" => "language_missing")
 
       expect(v.sms_template).to eq("Your code is {{CODE}}")
       expect(v.sms_language).to eq("de-DE")
       expect(v.sms_interception_timeout).to eq(300)
       expect(v.sms_code_length).to eq(6)
+      expect(v.sms_autofill).to eq("type" => "app_hash", "value" => "A1b2C3d4E5f")
       expect(v.sms_app_hash).to eq("A1b2C3d4E5f")
+      expect(v.sms_template_group).to eq("checkout")
+      expect(v.sms_template_group_used).to be(false)
+      expect(v.sms_template_fallback_reason).to eq("language_missing")
       expect(v.sms).to eq("template" => "Your code is {{CODE}}", "language" => "de-DE",
-        "interception_timeout" => 300, "code_length" => 6, "app_hash" => "A1b2C3d4E5f")
+        "interception_timeout" => 300, "code_length" => 6,
+        "autofill" => {"type" => "app_hash", "value" => "A1b2C3d4E5f"},
+        "template_group" => "checkout", "template_group_used" => false,
+        "template_fallback_reason" => "language_missing")
+    end
+
+    it "reads a domain autofill, whose value is the domain" do
+      v = get_with_sms("autofill" => {"type" => "domain", "value" => "example.com"})
+
+      expect(v.sms_autofill).to eq("type" => "domain", "value" => "example.com")
+      expect(v.sms_app_hash).to be_nil
     end
 
     it "returns nil for a key the sms block omits" do
       v = get_with_sms("template" => "Your code is {{CODE}}", "interception_timeout" => 300)
 
+      expect(v.sms_autofill).to be_nil
       expect(v.sms_app_hash).to be_nil
       expect(v.sms_interception_timeout).to eq(300)
     end
@@ -364,7 +521,24 @@ RSpec.describe DIDWW::OTPVerification::Client do
       expect(v.sms_language).to be_nil
       expect(v.sms_interception_timeout).to be_nil
       expect(v.sms_code_length).to be_nil
+      expect(v.sms_autofill).to be_nil
       expect(v.sms_app_hash).to be_nil
+      expect(v.sms_template_group).to be_nil
+      expect(v.sms_template_group_used).to be_nil
+      expect(v.sms_template_fallback_reason).to be_nil
+    end
+
+    it "derives sms_app_hash only from an app_hash autofill" do
+      v = get_with_sms("autofill" => {"type" => "none"})
+
+      expect(v.sms_autofill).to eq("type" => "none")
+      expect(v.sms_app_hash).to be_nil
+    end
+
+    it "falls back to the flat app_hash when there is no autofill" do
+      v = get_with_sms("app_hash" => "A1b2C3d4E5f")
+
+      expect(v.sms_app_hash).to eq("A1b2C3d4E5f")
     end
   end
 
@@ -391,6 +565,15 @@ RSpec.describe DIDWW::OTPVerification::Client do
       v = get_with_callout("language" => "de-DE", "code_length" => 8)
 
       expect(v.callout_code_length).to eq(8)
+    end
+
+    it "reads the template group fields" do
+      v = get_with_callout("language" => "de-DE", "template_group" => "checkout",
+        "template_group_used" => true, "template_fallback_reason" => nil)
+
+      expect(v.callout_template_group).to eq("checkout")
+      expect(v.callout_template_group_used).to be(true)
+      expect(v.callout_template_fallback_reason).to be_nil
     end
 
     # An unmatched tag is not an error: the announcement falls back to en-US,
@@ -423,6 +606,9 @@ RSpec.describe DIDWW::OTPVerification::Client do
       expect(v.callout).to be_nil
       expect(v.callout_language).to be_nil
       expect(v.callout_code_length).to be_nil
+      expect(v.callout_template_group).to be_nil
+      expect(v.callout_template_group_used).to be_nil
+      expect(v.callout_template_fallback_reason).to be_nil
     end
 
     it "leaves the sms readers nil on a callout verification" do
@@ -527,6 +713,19 @@ RSpec.describe DIDWW::OTPVerification::Client do
           expect(e.retry_after).to eq(17)
         end
       expect(stub).to have_been_requested.times(1)
+    end
+
+    # A volume limit waits until the daily or monthly reset, so the header can be hours.
+    it "exposes a long retry_after for volume_limit_reached" do
+      stub_request(:post, "#{base}/api/v1/verifications")
+        .to_return(status: 429, body: {errors: [{code: "volume_limit_reached"}]}.to_json,
+          headers: {"Content-Type" => "application/json", "Retry-After" => "43200"})
+
+      expect { build.start_verification(destination: "+49", delivery_method: "sms") }
+        .to raise_error(DIDWW::OTPVerification::RateLimitedError) do |e|
+          expect(e.code).to eq("volume_limit_reached")
+          expect(e.retry_after).to eq(43200)
+        end
     end
 
     it "leaves retry_after nil when the Retry-After header is missing" do
