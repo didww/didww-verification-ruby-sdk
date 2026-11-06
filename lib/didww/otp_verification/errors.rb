@@ -50,8 +50,9 @@ module DIDWW
 
     # 429 Too Many Requests. +code+ says which limit was hit:
     # +destination_in_cooldown+ (this destination was requested too recently),
-    # a +rate_limit_*+ request limit, or +volume_limit_reached+ (a daily or
-    # monthly limit; +retry_after+ can be days).
+    # a +rate_limit_*+ request limit, +volume_limit_reached+ (a daily or
+    # monthly limit; +retry_after+ can be days), or +destination_prefix_rate_limited+
+    # (too many verifications to this number range; wait +retry_after+).
     # Never auto-retry this.
     class RateLimitedError < APIError
       # @return [Integer, nil] seconds to wait, from the Retry-After header.

@@ -449,7 +449,7 @@ Non-2xx responses raise a typed error under `DIDWW::OTPVerification::Error`:
 | `BalanceInsufficientError` | 402       | `balance_insufficient`                |
 | `NotFoundError`            | 404       | `not_found`                           |
 | `ValidationError`          | 400 / 422 | `parameter_missing` / per-field codes |
-| `RateLimitedError`         | 429       | `destination_in_cooldown`, `rate_limit_*`, `volume_limit_reached` |
+| `RateLimitedError`         | 429       | `destination_in_cooldown`, `rate_limit_*`, `volume_limit_reached`, `destination_prefix_rate_limited` |
 | `ServerError`              | 5xx       | `internal_error`                      |
 
 Every error carries the API's coded envelope: `#errors` is an array of
@@ -490,6 +490,9 @@ A 429 raises `RateLimitedError`, and its code says which limit was hit:
 - `volume_limit_reached`: the application reached its daily or monthly
   verification limit. `Retry-After` can be long (days) — surface it to the
   user instead of retrying. Contact support to raise the limit.
+- `destination_prefix_rate_limited`: too many verifications to this number range;
+  try again later. Wait `Retry-After` before starting another one, and show the
+  user "Too many verification requests right now. Please try again later."
 
 `#retry_after` gives the wait in seconds (`nil` if the `Retry-After` header is
 missing or unparseable) — wait that long before trying again yourself; never
