@@ -830,6 +830,19 @@ RSpec.describe DIDWW::OTPVerification::Client do
           expect(e.message).to eq("destination can't be blank, delivery method is invalid")
         end
     end
+
+    it "raises ValidationError with the channel_blocked code on 422" do
+      stub_request(:post, "#{base}/api/v1/verifications")
+        .to_return(status: 422, body: {errors: [
+          {code: "channel_blocked", detail: "delivery method is blocked for this account"}
+        ]}.to_json, headers: {"Content-Type" => "application/json"})
+
+      expect { build.start_verification(destination: "+49", delivery_method: "sms") }
+        .to raise_error(DIDWW::OTPVerification::ValidationError) do |e|
+          expect(e.status).to eq(422)
+          expect(e.code).to eq("channel_blocked")
+        end
+    end
   end
 
   describe "#get_verification_by_number" do

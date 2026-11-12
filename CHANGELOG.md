@@ -14,6 +14,9 @@ to the public surface requires a major version.
   (429) from `start_verification` when there are too many verifications to a
   number range. `#retry_after` carries the `Retry-After` wait in seconds; do not
   retry it automatically.
+- **`channel_blocked` error code.** A start can be refused with a 422 carrying it
+  when the account can't use the requested delivery method. Contact DIDWW
+  support.
 
 ## [1.2.0] — 2026-10
 

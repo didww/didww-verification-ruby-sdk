@@ -473,6 +473,9 @@ rescue DIDWW::OTPVerification::ValidationError => e
 end
 ```
 
+`channel_blocked` (422): the account can't use the requested delivery method.
+No verification is created; contact DIDWW support.
+
 ## Retries
 
 The SDK does **not** auto-retry. If you add `faraday-retry`, exclude `POST`
