@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html): from 1.0.0 onwards a breaking change
 to the public surface requires a major version.
 
+## [1.3.0] — Unreleased
+
+### Added
+
+- **`destination_prefix_rate_limited` error code**, raised as `RateLimitedError`
+  (429) from `start_verification` when there are too many verifications to a
+  number range. `#retry_after` carries the `Retry-After` wait in seconds; do not
+  retry it automatically.
+- **`channel_blocked` error code.** A start can be refused with a 422 carrying it
+  when the account can't use the requested delivery method. Contact DIDWW
+  support.
+
 ## [1.2.0] — 2026-10
 
 ### Added

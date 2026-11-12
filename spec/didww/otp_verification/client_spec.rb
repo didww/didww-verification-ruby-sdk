@@ -728,6 +728,19 @@ RSpec.describe DIDWW::OTPVerification::Client do
         end
     end
 
+    it "exposes retry_after for destination_prefix_rate_limited" do
+      stub_request(:post, "#{base}/api/v1/verifications")
+        .to_return(status: 429,
+          body: {errors: [{code: "destination_prefix_rate_limited", detail: "too many verifications to this number range; try again later"}]}.to_json,
+          headers: {"Content-Type" => "application/json", "Retry-After" => "120"})
+
+      expect { build.start_verification(destination: "+49", delivery_method: "sms") }
+        .to raise_error(DIDWW::OTPVerification::RateLimitedError) do |e|
+          expect(e.code).to eq("destination_prefix_rate_limited")
+          expect(e.retry_after).to eq(120)
+        end
+    end
+
     it "leaves retry_after nil when the Retry-After header is missing" do
       stub_request(:post, "#{base}/api/v1/verifications")
         .to_return(status: 429, body: {errors: [{code: "destination_in_cooldown"}]}.to_json,
@@ -815,6 +828,19 @@ RSpec.describe DIDWW::OTPVerification::Client do
           expect(e.codes).to eq(["destination_blank", "delivery_method_invalid"])
           expect(e.errors.first.detail).to eq("destination can't be blank")
           expect(e.message).to eq("destination can't be blank, delivery method is invalid")
+        end
+    end
+
+    it "raises ValidationError with the channel_blocked code on 422" do
+      stub_request(:post, "#{base}/api/v1/verifications")
+        .to_return(status: 422, body: {errors: [
+          {code: "channel_blocked", detail: "delivery method is blocked for this account"}
+        ]}.to_json, headers: {"Content-Type" => "application/json"})
+
+      expect { build.start_verification(destination: "+49", delivery_method: "sms") }
+        .to raise_error(DIDWW::OTPVerification::ValidationError) do |e|
+          expect(e.status).to eq(422)
+          expect(e.code).to eq("channel_blocked")
         end
     end
   end
